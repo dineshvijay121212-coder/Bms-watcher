@@ -1,46 +1,33 @@
-const { chromium, devices } = require('playwright');
-const fs = require('fs');
+const { chromium } = require('playwright');
 
-const TARGET_DATE = '20260108';
-
-const URL =
-  `https://in.bookmyshow.com/cinemas/salem/` +
-  `spr-cinecastle-4krgb-64ch-dolby-atmos-salem/` +
-  `buytickets/SPRS/${TARGET_DATE}`;
+const TARGET_DATE = '10'; // day number, not YYYYMMDD
+const URL = 'https://in.bookmyshow.com/cinemas/salem/spr-cinecastle-4krgb-64ch-dolby-atmos-salem/buytickets/SPRS';
 
 (async () => {
   const browser = await chromium.launch({ headless: true });
-
-  // 🔥 Force MOBILE layout (this is the key)
-  const context = await browser.newContext({
-    ...devices['Pixel 5'],
-    locale: 'en-IN',
-    timezoneId: 'Asia/Kolkata'
-  });
-
-  const page = await context.newPage();
+  const page = await browser.newPage();
 
   await page.goto(URL, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(6000);
 
-  // Scroll to force lazy-loaded showtimes
-  await page.evaluate(() => {
-    window.scrollBy(0, window.innerHeight);
-  });
+  // wait for date strip
+  await page.waitForSelector('[data-date]');
 
-  await page.waitForTimeout(3000);
+  const status = await page.evaluate((TARGET_DATE) => {
+    const dates = [...document.querySelectorAll('[data-date]')];
 
-  const hasShows = await page.evaluate(() => {
-    // Mobile showtime buttons always contain "AM / PM"
-    return [...document.querySelectorAll('a, button')].some(el =>
-      /\b(AM|PM)\b/.test(el.textContent)
+    const target = dates.find(d =>
+      d.innerText.trim() === TARGET_DATE
     );
-  });
 
-  console.log('HAS SHOWS:', hasShows);
+    if (!target) return 'WAIT';
 
-  const status = hasShows ? 'LIVE' : 'WAIT';
-  fs.writeFileSync('status.txt', status);
+    const disabled =
+      target.getAttribute('aria-disabled') === 'true' ||
+      target.className.toLowerCase().includes('disabled');
+
+    return disabled ? 'WAIT' : 'LIVE';
+  }, TARGET_DATE);
+
   console.log('STATUS:', status);
 
   await browser.close();
