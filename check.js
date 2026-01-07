@@ -1,7 +1,8 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 
-const TARGET_DATE = '20260107'; // YYYYMMDD
+const TARGET_DATE = '20260110'; // YYYYMMDD
+const TARGET_DAY = '10';        // day of month (string)
 
 const URL =
   `https://in.bookmyshow.com/cinemas/salem/` +
@@ -13,33 +14,39 @@ const URL =
   const page = await browser.newPage();
 
   await page.goto(URL, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(5000); // allow SPA hydration
 
-  // Give SPA time to settle
-  await page.waitForTimeout(5000);
+  const result = await page.evaluate(() => {
+    // Date pills are anchor elements in the date strip
+    const pills = Array.from(document.querySelectorAll('a[href*="/buytickets/"]'));
 
-  // Find the ACTIVE date pill (this is the source of truth)
-  const activeDate = await page.evaluate(() => {
-    const active =
-      document.querySelector('[aria-selected="true"]') ||
-      document.querySelector('.active') ||
-      document.querySelector('[class*="selected"]');
+    const visiblePills = pills.filter(p => {
+      const rect = p.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
 
-    if (!active) return null;
+    // Active date = pill that is NOT disabled / clickable
+    const active = visiblePills.find(p => {
+      const style = window.getComputedStyle(p);
+      return style.pointerEvents === 'none' || p.getAttribute('aria-disabled') === 'true';
+    });
 
-    // Try to extract date text
-    return active.textContent?.trim() || null;
+    return {
+      activeText: active ? active.textContent.trim() : null,
+      allDates: visiblePills.map(p => p.textContent.trim())
+    };
   });
 
-  console.log('ACTIVE DATE TEXT:', activeDate);
+  console.log('ALL DATES:', result.allDates);
+  console.log('ACTIVE DATE TEXT:', result.activeText);
 
-  // If the active date still represents TARGET_DATE → LIVE
-  const status =
-    activeDate && activeDate.includes('10')
-      ? 'LIVE'
-      : 'WAIT';
+  let status = 'WAIT';
+
+  if (result.activeText && result.activeText.includes(TARGET_DAY)) {
+    status = 'LIVE';
+  }
 
   fs.writeFileSync('status.txt', status);
-
   console.log('STATUS:', status);
 
   await browser.close();
