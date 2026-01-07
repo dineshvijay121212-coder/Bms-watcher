@@ -1,9 +1,9 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 
-const TARGET_DATE = '20260110';
+const TARGET_DATE = '20260110'; // YYYYMMDD
 
-const REQUESTED_URL =
+const URL =
   `https://in.bookmyshow.com/cinemas/salem/` +
   `spr-cinecastle-4krgb-64ch-dolby-atmos-salem/` +
   `buytickets/SPRS/${TARGET_DATE}`;
@@ -12,32 +12,35 @@ const REQUESTED_URL =
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
 
-  // Go to requested date
-  await page.goto(REQUESTED_URL, { waitUntil: 'domcontentloaded' });
+  await page.goto(URL, { waitUntil: 'networkidle' });
 
-  let finalStatus = 'LIVE'; // assume live, disprove if redirected
+  // Give SPA time to settle
+  await page.waitForTimeout(5000);
 
-  try {
-    // Wait until URL changes away from target date
-    await page.waitForURL(
-      url => !url.pathname.endsWith(TARGET_DATE),
-      { timeout: 10000 } // 10s is safe for slow networks
-    );
+  // Find the ACTIVE date pill (this is the source of truth)
+  const activeDate = await page.evaluate(() => {
+    const active =
+      document.querySelector('[aria-selected="true"]') ||
+      document.querySelector('.active') ||
+      document.querySelector('[class*="selected"]');
 
-    // If we reach here → URL CHANGED → date is NOT live
-    finalStatus = 'WAIT';
+    if (!active) return null;
 
-  } catch (e) {
-    // Timeout means URL never changed → date stayed valid
-    finalStatus = 'LIVE';
-  }
+    // Try to extract date text
+    return active.textContent?.trim() || null;
+  });
 
-  // DEBUG (helps you trust it)
-  const finalUrl = page.url();
-  console.log('FINAL URL:', finalUrl);
-  console.log('STATUS:', finalStatus);
+  console.log('ACTIVE DATE TEXT:', activeDate);
 
-  fs.writeFileSync('status.txt', finalStatus);
+  // If the active date still represents TARGET_DATE → LIVE
+  const status =
+    activeDate && activeDate.includes('10')
+      ? 'LIVE'
+      : 'WAIT';
+
+  fs.writeFileSync('status.txt', status);
+
+  console.log('STATUS:', status);
 
   await browser.close();
 })();
