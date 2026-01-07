@@ -1,8 +1,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 
-const TARGET_DATE = '20260110'; // YYYYMMDD
-const TARGET_DAY = '10';        // day of month (string)
+const TARGET_DATE = '20260110';
 
 const URL =
   `https://in.bookmyshow.com/cinemas/salem/` +
@@ -14,37 +13,17 @@ const URL =
   const page = await browser.newPage();
 
   await page.goto(URL, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(5000); // allow SPA hydration
 
-  const result = await page.evaluate(() => {
-    // Date pills are anchor elements in the date strip
-    const pills = Array.from(document.querySelectorAll('a[href*="/buytickets/"]'));
+  // Give SPA enough time to do replaceState()
+  await page.waitForTimeout(7000);
 
-    const visiblePills = pills.filter(p => {
-      const rect = p.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    });
+  // Read the REAL address bar value
+  const actualHref = await page.evaluate(() => window.location.href);
 
-    // Active date = pill that is NOT disabled / clickable
-    const active = visiblePills.find(p => {
-      const style = window.getComputedStyle(p);
-      return style.pointerEvents === 'none' || p.getAttribute('aria-disabled') === 'true';
-    });
+  console.log('REQUESTED URL:', URL);
+  console.log('ADDRESS BAR URL:', actualHref);
 
-    return {
-      activeText: active ? active.textContent.trim() : null,
-      allDates: visiblePills.map(p => p.textContent.trim())
-    };
-  });
-
-  console.log('ALL DATES:', result.allDates);
-  console.log('ACTIVE DATE TEXT:', result.activeText);
-
-  let status = 'WAIT';
-
-  if (result.activeText && result.activeText.includes(TARGET_DAY)) {
-    status = 'LIVE';
-  }
+  const status = actualHref.endsWith(TARGET_DATE) ? 'LIVE' : 'WAIT';
 
   fs.writeFileSync('status.txt', status);
   console.log('STATUS:', status);
