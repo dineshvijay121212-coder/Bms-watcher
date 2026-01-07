@@ -1,7 +1,7 @@
-const { chromium } = require('playwright');
+const { chromium, devices } = require('playwright');
 const fs = require('fs');
 
-const TARGET_DATE = '20260108';
+const TARGET_DATE = '20260110';
 
 const URL =
   `https://in.bookmyshow.com/cinemas/salem/` +
@@ -10,23 +10,38 @@ const URL =
 
 (async () => {
   const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
 
-  await page.goto(URL, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(7000); // allow lazy load
-
-  const hasShows = await page.evaluate(() => {
-    // Showtime cards always have data-session-id
-    const shows = document.querySelectorAll('[data-session-id]');
-    return shows.length > 0;
+  // 🔥 Force MOBILE layout (this is the key)
+  const context = await browser.newContext({
+    ...devices['Pixel 5'],
+    locale: 'en-IN',
+    timezoneId: 'Asia/Kolkata'
   });
 
-  const status = hasShows ? 'LIVE' : 'WAIT';
+  const page = await context.newPage();
+
+  await page.goto(URL, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(6000);
+
+  // Scroll to force lazy-loaded showtimes
+  await page.evaluate(() => {
+    window.scrollBy(0, window.innerHeight);
+  });
+
+  await page.waitForTimeout(3000);
+
+  const hasShows = await page.evaluate(() => {
+    // Mobile showtime buttons always contain "AM / PM"
+    return [...document.querySelectorAll('a, button')].some(el =>
+      /\b(AM|PM)\b/.test(el.textContent)
+    );
+  });
 
   console.log('HAS SHOWS:', hasShows);
-  console.log('STATUS:', status);
 
+  const status = hasShows ? 'LIVE' : 'WAIT';
   fs.writeFileSync('status.txt', status);
+  console.log('STATUS:', status);
 
   await browser.close();
 })();
