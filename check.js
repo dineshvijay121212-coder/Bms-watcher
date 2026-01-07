@@ -1,6 +1,6 @@
 const { chromium } = require('playwright');
 
-const TARGET_DAY = '10'; // day only: 08, 10, 20
+const TARGET_DAY = '08'; // day only: 08, 10, 20
 const URL = 'https://in.bookmyshow.com/cinemas/salem/spr-cinecastle-4krgb-64ch-dolby-atmos-salem/buytickets/SPRS';
 
 (async () => {
