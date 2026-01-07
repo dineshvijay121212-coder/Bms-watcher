@@ -13,20 +13,20 @@ const URL =
   const page = await browser.newPage();
 
   await page.goto(URL, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(7000); // allow lazy load
 
-  // Give SPA enough time to do replaceState()
-  await page.waitForTimeout(7000);
+  const hasShows = await page.evaluate(() => {
+    // Showtime cards always have data-session-id
+    const shows = document.querySelectorAll('[data-session-id]');
+    return shows.length > 0;
+  });
 
-  // Read the REAL address bar value
-  const actualHref = await page.evaluate(() => window.location.href);
+  const status = hasShows ? 'LIVE' : 'WAIT';
 
-  console.log('REQUESTED URL:', URL);
-  console.log('ADDRESS BAR URL:', actualHref);
-
-  const status = actualHref.endsWith(TARGET_DATE) ? 'LIVE' : 'WAIT';
+  console.log('HAS SHOWS:', hasShows);
+  console.log('STATUS:', status);
 
   fs.writeFileSync('status.txt', status);
-  console.log('STATUS:', status);
 
   await browser.close();
 })();
