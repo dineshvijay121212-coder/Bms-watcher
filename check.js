@@ -1,7 +1,7 @@
 const { chromium, devices } = require('playwright');
 const fs = require('fs');
 
-const TARGET_DATE = '20260110';
+const TARGET_DATE = '20260108';
 
 const URL =
   `https://in.bookmyshow.com/cinemas/salem/` +
